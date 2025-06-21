@@ -1,0 +1,211 @@
+import { Request, Response, NextFunction } from 'express';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import cors from 'cors';
+import morgan from 'morgan';
+import { config } from '../config';
+import { createRequestLogger } from '../utils/logger';
+import { createErrorHandler } from '../utils/error';
+import { sendError } from '../utils/response';
+
+/**
+ * Creates CORS middleware configuration
+ * Pure function for CORS setup
+ */
+export const createCorsOptions = (nodeEnv: string) => ({
+  origin: nodeEnv === 'production' 
+    ? ['https://yourdomain.com'] // Add your production domains
+    : true, // Allow all origins in development
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+});
+
+/**
+ * Creates rate limiting middleware
+ * Function for rate limiter configuration
+ */
+export const createRateLimiter = (windowMs: number, maxRequests: number) => {
+  return rateLimit({
+    windowMs,
+    max: maxRequests,
+    message: {
+      success: false,
+      message: 'Too many requests from this IP, please try again later',
+      error: 'Rate limit exceeded',
+      timestamp: new Date().toISOString(),
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+};
+
+/**
+ * Creates security middleware
+ * Function for helmet configuration
+ */
+export const createSecurityMiddleware = () => {
+  return helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  });
+};
+
+/**
+ * Creates request parsing middleware
+ * Function for request body parsing
+ */
+export const createRequestParser = () => {
+  const express = require('express');
+  return [
+    express.json({ limit: '10mb' }),
+    express.urlencoded({ extended: true, limit: '10mb' }),
+  ];
+};
+
+/**
+ * Creates not found middleware
+ * Function for 404 error handling
+ */
+export const createNotFoundMiddleware = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    sendError(res, `Route ${req.originalUrl} not found`, undefined, 404);
+  };
+};
+
+/**
+ * Creates health check middleware
+ * Function for health endpoint
+ */
+export const createHealthCheckMiddleware = () => {
+  return (req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      message: 'Server is healthy',
+      data: {
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: config.nodeEnv,
+        version: process.env.npm_package_version || '1.0.0',
+      },
+      timestamp: new Date().toISOString(),
+    });
+  };
+};
+
+/**
+ * Creates request ID middleware
+ * Function for request tracking
+ */
+export const createRequestIdMiddleware = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const requestId = req.headers['x-request-id'] || 
+                     `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    req.headers['x-request-id'] = requestId as string;
+    res.setHeader('X-Request-ID', requestId);
+    
+    next();
+  };
+};
+
+/**
+ * Creates API version middleware
+ * Function for API versioning
+ */
+export const createApiVersionMiddleware = (version: string = 'v1') => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('X-API-Version', version);
+    next();
+  };
+};
+
+/**
+ * Creates request timeout middleware
+ * Function for request timeout handling
+ */
+export const createTimeoutMiddleware = (timeoutMs: number = 30000) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const timeout = setTimeout(() => {
+      if (!res.headersSent) {
+        sendError(res, 'Request timeout', undefined, 408);
+      }
+    }, timeoutMs);
+
+    res.on('finish', () => {
+      clearTimeout(timeout);
+    });
+
+    next();
+  };
+};
+
+/**
+ * Applies all common middleware to express app
+ * Function composition for middleware setup
+ */
+export const applyCommonMiddleware = (app: any) => {
+  // Security middleware
+  app.use(createSecurityMiddleware());
+  
+  // CORS middleware
+  app.use(cors(createCorsOptions(config.nodeEnv)));
+  
+  // Rate limiting
+  app.use(createRateLimiter(config.rateLimitWindowMs, config.rateLimitMaxRequests));
+  
+  // Request parsing
+  app.use(...createRequestParser());
+  
+  // Request tracking
+  app.use(createRequestIdMiddleware());
+  
+  // API versioning
+  app.use(createApiVersionMiddleware());
+  
+  // Request timeout
+  app.use(createTimeoutMiddleware());
+  
+  // Logging
+  if (config.nodeEnv === 'development') {
+    app.use(morgan('dev'));
+  }
+  app.use(createRequestLogger());
+  
+  return app;
+};
+
+/**
+ * Applies error handling middleware to express app
+ * Function for error middleware setup
+ */
+export const applyErrorMiddleware = (app: any) => {
+  // 404 handler
+  app.use(createNotFoundMiddleware());
+  
+  // Global error handler
+  app.use(createErrorHandler());
+  
+  return app;
+};
+
+// Export individual middleware components
+export const corsMiddleware = cors(createCorsOptions(config.nodeEnv));
+export const rateLimitMiddleware = createRateLimiter(config.rateLimitWindowMs, config.rateLimitMaxRequests);
+export const securityMiddleware = createSecurityMiddleware();
+export const healthCheckMiddleware = createHealthCheckMiddleware();
+export const notFoundMiddleware = createNotFoundMiddleware();
+export const errorHandlerMiddleware = createErrorHandler(); 
