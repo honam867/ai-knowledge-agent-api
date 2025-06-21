@@ -39,9 +39,6 @@ export const startServer = async (app: express.Application, port: number) => {
       });
       logger.info(`🚀 Server running on port ${port}`);
       logger.info(`📱 Environment: ${config.nodeEnv}`);
-      logger.info(`🔍 Health check: http://localhost:${port}/api/health`);
-      logger.info(`📊 Testing API: http://localhost:${port}/api/testing`);
-      logger.info(`🤖 AI API: http://localhost:${port}/api/ai`);
     });
 
     // Graceful shutdown handling
