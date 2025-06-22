@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { testingRoutes } from './testing.routes';
-// import { aiRoutes } from './ai.routes';
 import { healthCheckMiddleware } from '../middleware';
 
 /**
@@ -34,11 +33,7 @@ export const createAPIRoutes = (): Router => {
       timestamp: new Date().toISOString(),
     });
   });
-
-  // Mount feature routes
   router.use('/testing', testingRoutes);
-  // router.use('/ai', aiRoutes);
-
   return router;
 };
 
