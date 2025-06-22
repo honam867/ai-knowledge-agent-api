@@ -3,10 +3,12 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
+import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { createRequestLogger } from '../utils/logger';
 import { createErrorHandler } from '../utils/error';
 import { sendError } from '../utils/response';
+import { JWTPayload } from '../types';
 
 /**
  * Creates CORS middleware configuration
@@ -154,6 +156,73 @@ export const createTimeoutMiddleware = (timeoutMs: number = 30000) => {
 };
 
 /**
+ * Creates JWT authentication middleware
+ * Function for JWT token verification
+ */
+export const createJwtAuthMiddleware = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') 
+      ? authHeader.substring(7) 
+      : null;
+
+    if (!token) {
+      return sendError(res, 'Access token is required', undefined, 401);
+    }
+
+    try {
+      const decoded = jwt.verify(token, config.jwtSecret) as any;
+      
+      // Ensure the token has the expected payload structure
+      if (!decoded.userId || !decoded.email) {
+        return sendError(res, 'Invalid token payload', undefined, 401);
+      }
+      
+      // Set user info on request object
+      req.user = {
+        id: decoded.userId,
+        email: decoded.email,
+      };
+      
+      next();
+    } catch (error) {
+      if (error instanceof jwt.JsonWebTokenError) {
+        return sendError(res, 'Invalid token', undefined, 401);
+      }
+      if (error instanceof jwt.TokenExpiredError) {
+        return sendError(res, 'Token expired', undefined, 401);
+      }
+      return sendError(res, 'Authentication failed', undefined, 401);
+    }
+  };
+};
+
+/**
+ * Creates optional JWT authentication middleware
+ * Function for optional JWT token verification (doesn't fail if no token)
+ */
+export const createOptionalJwtAuthMiddleware = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') 
+      ? authHeader.substring(7) 
+      : null;
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, config.jwtSecret) as JWTPayload;
+        req.user = decoded;
+      } catch (error) {
+        // Token is invalid, but we don't fail - just continue without user
+        req.user = undefined;
+      }
+    }
+
+    next();
+  };
+};
+
+/**
  * Applies all common middleware to express app
  * Function composition for middleware setup
  */
@@ -207,5 +276,7 @@ export const corsMiddleware = cors(createCorsOptions(config.nodeEnv));
 export const rateLimitMiddleware = createRateLimiter(config.rateLimitWindowMs, config.rateLimitMaxRequests);
 export const securityMiddleware = createSecurityMiddleware();
 export const healthCheckMiddleware = createHealthCheckMiddleware();
+export const jwtAuthMiddleware = createJwtAuthMiddleware();
+export const optionalJwtAuthMiddleware = createOptionalJwtAuthMiddleware();
 export const notFoundMiddleware = createNotFoundMiddleware();
 export const errorHandlerMiddleware = createErrorHandler(); 

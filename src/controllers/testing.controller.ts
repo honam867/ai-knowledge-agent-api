@@ -6,11 +6,11 @@ import {
   updateTestingById,
   deleteTestingById,
   getTestingStats,
-} from '../services/testing.service';
-import { sendSuccess, sendError } from '../utils/response';
-import { logInfo } from '../utils/logger';
-import { CreateTestingDTO, UpdateTestingDTO, TypedRequest } from '../types';
-import { asyncErrorHandler } from '../utils/error';
+} from '@/services/testing.service';
+import { sendSuccess, sendError } from '@/utils/response';
+import { logInfo } from '@/utils/logger';
+import { CreateTestingDTO, UpdateTestingDTO, TypedRequest } from '@/types';
+import { asyncErrorHandler } from '@/utils/error';
 
 /**
  * Creates a new testing record

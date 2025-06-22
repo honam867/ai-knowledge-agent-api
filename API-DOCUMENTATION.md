@@ -5,6 +5,7 @@
 This is a scalable Node.js API backend built with functional programming principles, designed for AI knowledge management. The architecture follows a clean, modular approach with clear separation of concerns.
 
 ### Tech Stack
+
 - **Runtime**: Node.js 18+ LTS
 - **Framework**: Express.js with TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
@@ -32,7 +33,6 @@ be/
 │   │   └── index.ts            # Common middleware functions
 │   ├── routes/
 │   │   ├── index.ts            # Main route aggregator
-│   │   ├── ai.routes.ts        # AI route definitions
 │   │   └── testing.routes.ts   # Testing route definitions
 │   ├── services/               # Business logic (pure functions)
 │   │   ├── ai.service.ts       # AI processing logic
@@ -55,12 +55,14 @@ be/
 ## 🔧 Development Environment Setup
 
 ### Prerequisites
+
 - Node.js 18+ LTS
 - Docker & Docker Compose
 - Supabase account (or local PostgreSQL)
 - Google Cloud account (for Gemini API)
 
 ### Environment Variables (.env)
+
 ```env
 # Server Configuration
 PORT=3000
@@ -85,6 +87,7 @@ LOG_LEVEL=info
 ```
 
 ### Development Commands
+
 ```bash
 # Install dependencies
 npm install
@@ -114,6 +117,7 @@ docker-compose down    # Stop all services
 ## 🚀 API Endpoints
 
 ### Base URL
+
 ```
 http://localhost:3000/api
 ```
@@ -121,10 +125,13 @@ http://localhost:3000/api
 ### Core Endpoints
 
 #### Health Check
+
 ```http
 GET /api/health
 ```
+
 **Response:**
+
 ```json
 {
   "success": true,
@@ -141,10 +148,13 @@ GET /api/health
 ```
 
 #### API Information
+
 ```http
 GET /api/
 ```
+
 **Response:**
+
 ```json
 {
   "success": true,
@@ -167,10 +177,13 @@ GET /api/
 ### Testing CRUD API
 
 #### List Testing Records
+
 ```http
 GET /api/testing?page=1&limit=10&status=active&search=test&sortBy=createdAt&sortOrder=desc
 ```
+
 **Query Parameters:**
+
 - `page` (optional): Page number (default: 1)
 - `limit` (optional): Items per page (default: 10)
 - `status` (optional): Filter by status (active|inactive|pending)
@@ -179,6 +192,7 @@ GET /api/testing?page=1&limit=10&status=active&search=test&sortBy=createdAt&sort
 - `sortOrder` (optional): Sort direction (asc|desc)
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -207,11 +221,13 @@ GET /api/testing?page=1&limit=10&status=active&search=test&sortBy=createdAt&sort
 ```
 
 #### Get Testing Record by ID
+
 ```http
 GET /api/testing/:id
 ```
 
 #### Create Testing Record
+
 ```http
 POST /api/testing
 Content-Type: application/json
@@ -224,6 +240,7 @@ Content-Type: application/json
 ```
 
 #### Update Testing Record
+
 ```http
 PUT /api/testing/:id
 Content-Type: application/json
@@ -235,21 +252,25 @@ Content-Type: application/json
 ```
 
 #### Delete Testing Record
+
 ```http
 DELETE /api/testing/:id
 ```
 
 #### Get Testing Statistics
+
 ```http
 GET /api/testing/stats
 ```
 
 #### Testing Health Check
+
 ```http
 GET /api/testing/health
 ```
 
 #### Bulk Operations
+
 ```http
 POST /api/testing/bulk
 Content-Type: application/json
@@ -266,6 +287,7 @@ Content-Type: application/json
 The AI endpoints are implemented but commented out. When enabled:
 
 #### Generate Content
+
 ```http
 POST /api/ai/generate
 Content-Type: application/json
@@ -279,6 +301,7 @@ Content-Type: application/json
 ```
 
 #### Generate Summary
+
 ```http
 POST /api/ai/summary
 Content-Type: application/json
@@ -290,6 +313,7 @@ Content-Type: application/json
 ```
 
 #### Generate Keywords
+
 ```http
 POST /api/ai/keywords
 Content-Type: application/json
@@ -303,6 +327,7 @@ Content-Type: application/json
 ## 🏛️ Architecture Patterns
 
 ### Functional Programming Approach
+
 The codebase follows functional programming principles:
 
 1. **Pure Functions**: Most functions are pure with no side effects
@@ -313,6 +338,7 @@ The codebase follows functional programming principles:
 ### Layer Architecture
 
 #### 1. Routes Layer (`src/routes/`)
+
 - Route definitions and middleware attachment
 - Input validation
 - Route-specific middleware
@@ -321,17 +347,18 @@ The codebase follows functional programming principles:
 // Example route structure
 export const createTestingRoutes = (): Router => {
   const router = Router();
-  
+
   router
     .route('/')
     .get(getAllTestingController)
     .post(validateTestingCreation, createTestingController);
-    
+
   return router;
 };
 ```
 
 #### 2. Controllers Layer (`src/controllers/`)
+
 - Request/response handling
 - Input validation
 - Calling service functions
@@ -342,15 +369,16 @@ export const createTestingRoutes = (): Router => {
 export const createTestingController = asyncErrorHandler(
   async (req: TypedRequest<CreateTestingDTO>, res: Response) => {
     logInfo('Creating new testing record', { body: req.body });
-    
+
     const result = await createTesting(req.body);
-    
+
     return sendSuccess(res, 'Testing record created successfully', result, 201);
   }
 );
 ```
 
 #### 3. Services Layer (`src/services/`)
+
 - Business logic implementation
 - Database operations
 - External API calls
@@ -367,12 +395,13 @@ export const createTesting = async (data: CreateTestingDTO): Promise<TestingSele
       updatedAt: new Date(),
     })
     .returning();
-    
+
   return result;
 };
 ```
 
 #### 4. Database Layer (`src/db/`)
+
 - Schema definitions
 - Database connection
 - Migration management
@@ -392,6 +421,7 @@ export const testingTable = pgTable('testing', {
 ### Error Handling Pattern
 
 #### Async Error Handler
+
 ```typescript
 export const asyncErrorHandler = (fn: Function) => {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -401,6 +431,7 @@ export const asyncErrorHandler = (fn: Function) => {
 ```
 
 #### Error Response Format
+
 ```json
 {
   "success": false,
@@ -413,6 +444,7 @@ export const asyncErrorHandler = (fn: Function) => {
 ### Response Format Pattern
 
 #### Success Response
+
 ```typescript
 export const sendSuccess = <T>(
   res: Response,
@@ -430,6 +462,7 @@ export const sendSuccess = <T>(
 ```
 
 #### Error Response
+
 ```typescript
 export const sendError = (
   res: Response,
@@ -449,6 +482,7 @@ export const sendError = (
 ## 🔒 Security Implementation
 
 ### Middleware Stack
+
 1. **Helmet**: Security headers
 2. **CORS**: Cross-origin resource sharing
 3. **Rate Limiting**: Request throttling
@@ -456,6 +490,7 @@ export const sendError = (
 5. **JWT Authentication**: Token-based auth (when enabled)
 
 ### Security Headers
+
 ```typescript
 export const createSecurityMiddleware = () => {
   return helmet({
@@ -464,7 +499,7 @@ export const createSecurityMiddleware = () => {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
+        imgSrc: ["'self'", 'data:', 'https:'],
       },
     },
     hsts: {
@@ -477,6 +512,7 @@ export const createSecurityMiddleware = () => {
 ```
 
 ### Rate Limiting
+
 ```typescript
 export const createRateLimiter = (windowMs: number, maxRequests: number) => {
   return rateLimit({
@@ -497,6 +533,7 @@ export const createRateLimiter = (windowMs: number, maxRequests: number) => {
 ### Current Schema
 
 #### Testing Table
+
 ```sql
 CREATE TABLE testing (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -511,12 +548,10 @@ CREATE TABLE testing (
 ### Database Operations Pattern
 
 #### Using Drizzle ORM
+
 ```typescript
 // Insert
-const [result] = await db
-  .insert(testingTable)
-  .values(data)
-  .returning();
+const [result] = await db.insert(testingTable).values(data).returning();
 
 // Select with conditions
 const results = await db
@@ -534,12 +569,11 @@ const [updated] = await db
   .returning();
 
 // Delete
-await db
-  .delete(testingTable)
-  .where(eq(testingTable.id, id));
+await db.delete(testingTable).where(eq(testingTable.id, id));
 ```
 
 ### Migration Commands
+
 ```bash
 # Generate migration from schema changes
 npm run db:generate
@@ -554,22 +588,25 @@ npm run db:push
 ## 🤖 AI Integration Pattern
 
 ### Service Structure
+
 ```typescript
 // AI service pattern
 export const generateWithGemini = async (request: AIPromptRequest): Promise<AIResponse> => {
   const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-  
+
   const result = await model.generateContent({
-    contents: [{
-      role: 'user',
-      parts: [{ text: request.prompt }]
-    }],
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: request.prompt }],
+      },
+    ],
     generationConfig: {
       temperature: request.temperature || 0.7,
       maxOutputTokens: request.maxTokens || 1000,
     },
   });
-  
+
   return {
     content: result.response.text(),
     usage: {
@@ -582,6 +619,7 @@ export const generateWithGemini = async (request: AIPromptRequest): Promise<AIRe
 ```
 
 ### Controller Pattern
+
 ```typescript
 export const generateContentController = asyncErrorHandler(
   async (req: TypedRequest<AIPromptRequest>, res: Response) => {
@@ -589,9 +627,9 @@ export const generateContentController = asyncErrorHandler(
       promptLength: req.body.prompt?.length,
       hasContext: !!req.body.context,
     });
-    
+
     const result = await generateWithGemini(req.body);
-    
+
     return sendSuccess(res, 'AI content generated successfully', result);
   }
 );
@@ -602,6 +640,7 @@ export const generateContentController = asyncErrorHandler(
 ### Adding New Features
 
 #### 1. Define Types (`src/types/index.ts`)
+
 ```typescript
 // Add new entity types
 export interface NewEntityDTO {
@@ -619,6 +658,7 @@ export interface NewEntitySelect {
 ```
 
 #### 2. Create Database Schema (`src/db/schema.ts`)
+
 ```typescript
 export const newEntityTable = pgTable('new_entity', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -633,10 +673,11 @@ export type NewEntitySelect = InferSelectModel<typeof newEntityTable>;
 ```
 
 #### 3. Implement Service (`src/services/new-entity.service.ts`)
+
 ```typescript
-import { db } from '../db/connection';
-import { newEntityTable } from '../db/schema';
-import { NewEntityDTO, NewEntitySelect } from '../types';
+import db from '@/db/connection';
+import { newEntityTable } from '@/db/schema';
+import { NewEntityDTO, NewEntitySelect } from '@/types';
 
 export const createNewEntity = async (data: NewEntityDTO): Promise<NewEntitySelect> => {
   const [result] = await db
@@ -647,7 +688,7 @@ export const createNewEntity = async (data: NewEntityDTO): Promise<NewEntitySele
       updatedAt: new Date(),
     })
     .returning();
-    
+
   return result;
 };
 
@@ -657,12 +698,13 @@ export const getAllNewEntities = async (): Promise<NewEntitySelect[]> => {
 ```
 
 #### 4. Create Controller (`src/controllers/new-entity.controller.ts`)
+
 ```typescript
 import { Request, Response } from 'express';
-import { createNewEntity, getAllNewEntities } from '../services/new-entity.service';
-import { sendSuccess } from '../utils/response';
-import { asyncErrorHandler } from '../utils/error';
-import { TypedRequest, NewEntityDTO } from '../types';
+import { createNewEntity, getAllNewEntities } from '@/services/new-entity.service';
+import { sendSuccess } from '@/utils/response';
+import { asyncErrorHandler } from '@/utils/error';
+import { TypedRequest, NewEntityDTO } from '@/types';
 
 export const createNewEntityController = asyncErrorHandler(
   async (req: TypedRequest<NewEntityDTO>, res: Response) => {
@@ -680,20 +722,18 @@ export const getAllNewEntitiesController = asyncErrorHandler(
 ```
 
 #### 5. Define Routes (`src/routes/new-entity.routes.ts`)
+
 ```typescript
 import { Router } from 'express';
 import {
   createNewEntityController,
   getAllNewEntitiesController,
-} from '../controllers/new-entity.controller';
+} from '@/controllers/new-entity.controller';
 
 export const createNewEntityRoutes = (): Router => {
   const router = Router();
 
-  router
-    .route('/')
-    .get(getAllNewEntitiesController)
-    .post(createNewEntityController);
+  router.route('/').get(getAllNewEntitiesController).post(createNewEntityController);
 
   return router;
 };
@@ -702,20 +742,22 @@ export const newEntityRoutes = createNewEntityRoutes();
 ```
 
 #### 6. Register Routes (`src/routes/index.ts`)
+
 ```typescript
 import { newEntityRoutes } from './new-entity.routes';
 
 export const createAPIRoutes = (): Router => {
   const router = Router();
-  
+
   // ... existing routes
   router.use('/new-entity', newEntityRoutes);
-  
+
   return router;
 };
 ```
 
 #### 7. Validation Pattern
+
 ```typescript
 // Add to src/utils/validation.ts
 export const validateNewEntityCreation = (req: Request, res: Response, next: NextFunction) => {
@@ -728,14 +770,15 @@ export const validateNewEntityCreation = (req: Request, res: Response, next: Nex
   if (error) {
     return sendError(res, 'Validation error', error.details, 400);
   }
-  
+
   next();
 };
 ```
 
 #### 8. Logging Pattern
+
 ```typescript
-import { logInfo, logError } from '../utils/logger';
+import { logInfo, logError } from '@/utils/logger';
 
 // In controllers/services
 logInfo('Operation started', { context: 'relevant data' });
@@ -745,6 +788,7 @@ logError('Operation failed', { error, context: 'relevant data' });
 ## 🐳 Docker Deployment
 
 ### Development
+
 ```bash
 # Start all services
 docker-compose up -d
@@ -757,6 +801,7 @@ docker-compose down
 ```
 
 ### Production Considerations
+
 1. Use multi-stage builds (already implemented)
 2. Run as non-root user (already implemented)
 3. Health checks configured
@@ -764,6 +809,7 @@ docker-compose down
 5. Restart policies set
 
 ### Environment-Specific Configurations
+
 ```yaml
 # docker-compose.prod.yml
 version: '3.8'
@@ -780,17 +826,20 @@ services:
 ## 🔍 Monitoring & Debugging
 
 ### Health Checks
+
 - Application health: `/api/health`
 - Service-specific health: `/api/testing/health`
 - Docker health checks configured
 
 ### Logging
+
 - Structured logging with Winston
 - Request/response logging
 - Error tracking
 - Performance metrics
 
 ### Development Tools
+
 ```bash
 # Database management
 npm run db:studio
@@ -806,18 +855,21 @@ npm run dev
 ## 🚀 Performance Considerations
 
 ### Database Optimization
+
 - Use indexes for frequently queried fields
 - Implement pagination for large datasets
 - Use connection pooling
 - Optimize queries with Drizzle ORM
 
 ### API Optimization
+
 - Implement caching where appropriate
 - Use compression middleware
 - Set appropriate timeouts
 - Monitor response times
 
 ### Security Best Practices
+
 - Regular dependency updates
 - Environment variable validation
 - Input sanitization
@@ -827,12 +879,14 @@ npm run dev
 ## 📚 Additional Resources
 
 ### Documentation
+
 - [Express.js Documentation](https://expressjs.com/)
 - [Drizzle ORM Documentation](https://orm.drizzle.team/)
 - [TypeScript Documentation](https://www.typescriptlang.org/)
 - [Google Gemini API Documentation](https://ai.google.dev/)
 
 ### Development Guidelines
+
 - Follow functional programming principles
 - Write pure functions when possible
 - Use TypeScript strictly
@@ -842,4 +896,4 @@ npm run dev
 
 ---
 
-This documentation serves as a comprehensive guide for understanding and extending the AI Knowledge Agent backend. Follow these patterns and guidelines when implementing new features to maintain consistency and code quality. 
+This documentation serves as a comprehensive guide for understanding and extending the AI Knowledge Agent backend. Follow these patterns and guidelines when implementing new features to maintain consistency and code quality.

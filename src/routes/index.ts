@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { testingRoutes } from './testing.routes';
+import { authRoutes } from './auth.routes';
 import { healthCheckMiddleware } from '../middleware';
 
 /**
@@ -24,6 +25,7 @@ export const createAPIRoutes = (): Router => {
           'Scalable Node.js API with Express, TypeScript, Supabase, Drizzle ORM, and AI integration',
         endpoints: {
           health: '/api/health',
+          auth: '/api/auth',
           testing: '/api/testing',
           ai: '/api/ai',
         },
@@ -33,7 +35,11 @@ export const createAPIRoutes = (): Router => {
       timestamp: new Date().toISOString(),
     });
   });
+  
+  // Mount route modules
+  router.use('/auth', authRoutes);
   router.use('/testing', testingRoutes);
+  
   return router;
 };
 
