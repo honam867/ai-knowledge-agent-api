@@ -5,6 +5,8 @@ import {
   refreshTokenController,
   logoutController,
   getCurrentUserController,
+  googleOAuthController,
+  googleOAuthCallbackController,
 } from '@/controllers/auth.controller';
 import { validateUserRegistration, validateUserLogin } from '@/utils/validation';
 import { createJwtAuthMiddleware } from '@/middleware';
@@ -30,6 +32,10 @@ export const createAuthRoutes = (): Router => {
 
   // Get current user profile (requires authentication)
   router.get('/me', createJwtAuthMiddleware(), getCurrentUserController);
+
+  // Google OAuth routes
+  router.get('/google', googleOAuthController);
+  router.get('/google/callback', googleOAuthCallbackController);
 
   return router;
 };

@@ -10,6 +10,7 @@ This is a scalable Node.js API backend built with functional programming princip
 - **Framework**: Express.js with TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
 - **AI Integration**: Google Gemini Pro API
+- **Utilities**: Lodash for functional programming utilities
 - **Security**: Helmet, CORS, Rate limiting, JWT
 - **Logging**: Winston with structured logging
 - **Containerization**: Docker & Docker Compose
@@ -24,7 +25,6 @@ be/
 │   ├── config/
 │   │   └── index.ts             # Environment configuration
 │   ├── controllers/             # Route handlers (pure functions)
-│   │   ├── ai.controller.ts     # AI-related endpoints
 │   │   └── testing.controller.ts # Testing CRUD endpoints
 │   ├── db/
 │   │   ├── connection.ts        # Database connection setup
@@ -35,7 +35,6 @@ be/
 │   │   ├── index.ts            # Main route aggregator
 │   │   └── testing.routes.ts   # Testing route definitions
 │   ├── services/               # Business logic (pure functions)
-│   │   ├── ai.service.ts       # AI processing logic
 │   │   └── testing.service.ts  # Testing business logic
 │   ├── types/
 │   │   └── index.ts           # TypeScript type definitions
@@ -334,6 +333,49 @@ The codebase follows functional programming principles:
 2. **Immutability**: Data structures are treated as immutable
 3. **Function Composition**: Complex operations built from simple functions
 4. **Separation of Concerns**: Clear boundaries between layers
+5. **Lodash Integration**: Extensive use of Lodash utilities for functional programming
+
+### Lodash Usage Patterns
+
+Lodash is integrated throughout the codebase to enhance functional programming capabilities:
+
+#### Data Manipulation
+```typescript
+import _ from 'lodash';
+
+// Array operations
+const uniqueItems = _.uniq(items);
+const groupedData = _.groupBy(users, 'role');
+const sortedResults = _.orderBy(data, ['createdAt'], ['desc']);
+
+// Object operations
+const cleanData = _.omit(userData, ['password', 'internalId']);
+const mergedConfig = _.merge(defaultConfig, userConfig);
+const nestedValue = _.get(response, 'data.user.profile.name', 'Unknown');
+```
+
+#### Validation and Type Checking
+```typescript
+// Safe property access and validation
+const isValidEmail = _.isString(email) && !_.isEmpty(email);
+const hasRequiredFields = _.every(['name', 'email'], field => 
+  _.has(requestData, field) && !_.isEmpty(_.get(requestData, field))
+);
+```
+
+#### Functional Utilities
+```typescript
+// Debouncing and throttling
+const debouncedSave = _.debounce(saveToDatabase, 300);
+const throttledLogger = _.throttle(logActivity, 1000);
+
+// Function composition
+const processUserData = _.flow([
+  data => _.pick(data, ['name', 'email', 'role']),
+  data => _.mapValues(data, val => _.isString(val) ? _.trim(val) : val),
+  data => _.omitBy(data, _.isEmpty)
+]);
+```
 
 ### Layer Architecture
 
@@ -385,18 +427,41 @@ export const createTestingController = asyncErrorHandler(
 - Data transformation
 
 ```typescript
-// Example service pattern
+import _ from 'lodash';
+
+// Example service pattern with Lodash
 export const createTesting = async (data: CreateTestingDTO): Promise<TestingSelect> => {
+  // Clean and validate input data using Lodash
+  const cleanData = _.omitBy(
+    _.pick(data, ['name', 'description', 'status']),
+    _.isEmpty
+  );
+
   const [result] = await db
     .insert(testingTable)
     .values({
-      ...data,
+      ...cleanData,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
     .returning();
 
   return result;
+};
+
+// Example with data transformation
+export const getTestingStats = async (): Promise<TestingStats> => {
+  const records = await db.select().from(testingTable);
+  
+  return {
+    total: records.length,
+    byStatus: _.countBy(records, 'status'),
+    recent: _.take(_.orderBy(records, 'createdAt', 'desc'), 5),
+    oldestActive: _.minBy(
+      _.filter(records, { status: 'active' }), 
+      'createdAt'
+    ),
+  };
 };
 ```
 
@@ -675,15 +740,22 @@ export type NewEntitySelect = InferSelectModel<typeof newEntityTable>;
 #### 3. Implement Service (`src/services/new-entity.service.ts`)
 
 ```typescript
+import _ from 'lodash';
 import db from '@/db/connection';
 import { newEntityTable } from '@/db/schema';
 import { NewEntityDTO, NewEntitySelect } from '@/types';
 
 export const createNewEntity = async (data: NewEntityDTO): Promise<NewEntitySelect> => {
+  // Use Lodash to clean and validate input data
+  const cleanData = _.omitBy(
+    _.pick(data, ['name', 'description']),
+    val => _.isEmpty(val) || _.isNil(val)
+  );
+
   const [result] = await db
     .insert(newEntityTable)
     .values({
-      ...data,
+      ...cleanData,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
@@ -692,8 +764,52 @@ export const createNewEntity = async (data: NewEntityDTO): Promise<NewEntitySele
   return result;
 };
 
-export const getAllNewEntities = async (): Promise<NewEntitySelect[]> => {
-  return await db.select().from(newEntityTable);
+export const getAllNewEntities = async (filters?: {
+  status?: string;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}): Promise<NewEntitySelect[]> => {
+  let results = await db.select().from(newEntityTable);
+
+  if (filters) {
+    // Use Lodash for filtering and sorting
+    if (filters.status) {
+      results = _.filter(results, { status: filters.status });
+    }
+
+    if (filters.search) {
+      results = _.filter(results, entity => 
+        _.includes(_.toLower(entity.name), _.toLower(filters.search!)) ||
+        _.includes(_.toLower(entity.description || ''), _.toLower(filters.search!))
+      );
+    }
+
+    if (filters.sortBy) {
+      results = _.orderBy(
+        results, 
+        [filters.sortBy], 
+        [filters.sortOrder || 'asc']
+      );
+    }
+  }
+
+  return results;
+};
+
+export const getEntityStats = async (): Promise<any> => {
+  const entities = await db.select().from(newEntityTable);
+  
+  return {
+    total: entities.length,
+    byStatus: _.countBy(entities, 'status'),
+    recent: _.take(_.orderBy(entities, 'createdAt', 'desc'), 10),
+    summary: {
+      averageNameLength: _.meanBy(entities, entity => entity.name.length),
+      withDescription: _.filter(entities, entity => !_.isEmpty(entity.description)).length,
+      uniqueStatuses: _.uniq(_.map(entities, 'status')),
+    }
+  };
 };
 ```
 
@@ -823,6 +939,170 @@ services:
     # Production-specific configurations
 ```
 
+## 🔧 Lodash Integration Guide
+
+### Common Lodash Patterns
+
+#### Data Cleaning and Validation
+```typescript
+import _ from 'lodash';
+
+// Clean API request data
+const cleanRequestData = (data: any) => {
+  return _.omitBy(
+    _.mapValues(data, val => _.isString(val) ? _.trim(val) : val),
+    val => _.isEmpty(val) || _.isNil(val)
+  );
+};
+
+// Safe property access
+const getUserName = (user: any) => _.get(user, 'profile.name', 'Anonymous');
+
+// Validate required fields
+const validateRequired = (data: any, fields: string[]) => {
+  return _.every(fields, field => 
+    _.has(data, field) && !_.isEmpty(_.get(data, field))
+  );
+};
+```
+
+#### Array and Collection Operations
+```typescript
+// Group and aggregate data
+const groupUsersByRole = (users: User[]) => {
+  return _.mapValues(
+    _.groupBy(users, 'role'),
+    group => ({
+      count: group.length,
+      users: _.map(group, user => _.pick(user, ['id', 'name', 'email']))
+    })
+  );
+};
+
+// Sort and filter complex data
+const getTopActiveUsers = (users: User[], limit = 10) => {
+  return _.take(
+    _.orderBy(
+      _.filter(users, { status: 'active' }),
+      ['lastLoginAt', 'createdAt'],
+      ['desc', 'desc']
+    ),
+    limit
+  );
+};
+
+// Transform data structures
+const transformApiResponse = (rawData: any[]) => {
+  return _.map(rawData, item => ({
+    id: _.get(item, 'identifier'),
+    name: _.get(item, 'displayName', 'Untitled'),
+    metadata: _.pick(item, ['createdAt', 'updatedAt', 'status']),
+    tags: _.uniq(_.compact(_.get(item, 'tags', [])))
+  }));
+};
+```
+
+#### Performance Optimization
+```typescript
+// Debounce expensive operations
+const debouncedSearch = _.debounce(async (query: string) => {
+  return await searchDatabase(query);
+}, 300);
+
+// Throttle logging
+const throttledLogger = _.throttle((message: string, data: any) => {
+  logInfo(message, data);
+}, 1000);
+
+// Memoize expensive calculations
+const memoizedCalculation = _.memoize((data: any[]) => {
+  return _.reduce(data, (acc, item) => {
+    // Expensive calculation here
+    return acc + complexCalculation(item);
+  }, 0);
+});
+```
+
+#### Functional Composition
+```typescript
+// Create reusable data processing pipelines
+const processUserData = _.flow([
+  data => _.pick(data, ['name', 'email', 'role', 'preferences']),
+  data => _.mapValues(data, val => _.isString(val) ? _.trim(val) : val),
+  data => _.omitBy(data, _.isEmpty),
+  data => ({
+    ...data,
+    name: _.capitalize(data.name),
+    email: _.toLower(data.email)
+  })
+]);
+
+// Compose validation functions
+const validateUser = _.overEvery([
+  data => _.isString(data.email) && _.includes(data.email, '@'),
+  data => _.isString(data.name) && data.name.length >= 2,
+  data => _.includes(['admin', 'user', 'moderator'], data.role)
+]);
+```
+
+### Lodash in Different Layers
+
+#### Controllers
+```typescript
+// Clean and validate request data
+export const updateUserController = asyncErrorHandler(
+  async (req: TypedRequest<UpdateUserDTO>, res: Response) => {
+    const userId = req.params.id;
+    const updateData = _.omitBy(req.body, _.isNil);
+    
+    if (_.isEmpty(updateData)) {
+      return sendError(res, 'No valid update data provided', undefined, 400);
+    }
+
+    const result = await updateUser(userId, updateData);
+    return sendSuccess(res, 'User updated successfully', result);
+  }
+);
+```
+
+#### Services
+```typescript
+// Data transformation and business logic
+export const getUserAnalytics = async (userId: string) => {
+  const userData = await getUserById(userId);
+  const userActivities = await getUserActivities(userId);
+  
+  return {
+    user: _.omit(userData, ['password', 'internalNotes']),
+    stats: {
+      totalActivities: userActivities.length,
+      recentActivities: _.take(
+        _.orderBy(userActivities, 'timestamp', 'desc'), 
+        10
+      ),
+      activityByType: _.countBy(userActivities, 'type'),
+      averageSessionDuration: _.meanBy(userActivities, 'duration')
+    }
+  };
+};
+```
+
+#### Middleware
+```typescript
+// Request processing and validation
+export const createDataSanitizationMiddleware = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (req.body) {
+      req.body = _.mapValues(req.body, val => 
+        _.isString(val) ? _.trim(val) : val
+      );
+      req.body = _.omitBy(req.body, _.isEmpty);
+    }
+    next();
+  };
+};
+```
+
 ## 🔍 Monitoring & Debugging
 
 ### Health Checks
@@ -890,9 +1170,21 @@ npm run dev
 - Follow functional programming principles
 - Write pure functions when possible
 - Use TypeScript strictly
+- **Use Lodash utilities extensively** for data manipulation, validation, and functional operations
+- Prefer Lodash methods over native JavaScript for consistency and additional functionality
 - Implement comprehensive error handling
 - Add logging for debugging
 - Write tests for critical functionality
+
+### Lodash Best Practices
+
+- Always import Lodash as `import _ from 'lodash'` for consistency
+- Use Lodash for data cleaning: `_.omitBy()`, `_.pick()`, `_.omit()`
+- Use Lodash for safe property access: `_.get()`, `_.has()`
+- Use Lodash for array operations: `_.filter()`, `_.map()`, `_.orderBy()`, `_.groupBy()`
+- Use Lodash for validation: `_.isEmpty()`, `_.isNil()`, `_.every()`, `_.some()`
+- Use Lodash for performance: `_.debounce()`, `_.throttle()`, `_.memoize()`
+- Use Lodash for functional composition: `_.flow()`, `_.pipe()`
 
 ---
 

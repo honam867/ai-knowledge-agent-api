@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendSuccess, sendError } from '../utils/response';
 import { logInfo, logError } from '../utils/logger';
-import { LoginDTO, RegisterDTO, TypedRequest } from '../types';
+import { LoginDTO, RegisterDTO, TypedRequest, GoogleOAuthDTO } from '../types';
 import { asyncErrorHandler } from '../utils/error';
 import { 
   registerUser, 
@@ -9,6 +9,10 @@ import {
   getUserById, 
   updateUserLastLogin 
 } from '../services/auth.service';
+import { 
+  generateGoogleAuthUrl, 
+  completeGoogleOAuth 
+} from '../services/google-oauth.service';
 
 /**
  * User registration controller
@@ -141,6 +145,89 @@ export const getCurrentUserController = asyncErrorHandler(
       }
       
       return sendError(res, 'Failed to retrieve user profile', undefined, 500);
+    }
+  }
+);
+
+/**
+ * Google OAuth redirect controller
+ * Redirects user to Google OAuth consent screen
+ */
+export const googleOAuthController = asyncErrorHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    logInfo('Initiating Google OAuth flow');
+
+    try {
+      const authUrl = generateGoogleAuthUrl();
+
+      logInfo('Generated Google OAuth URL', { hasUrl: !!authUrl });
+
+      // Redirect to Google OAuth consent screen
+      return res.redirect(authUrl);
+    } catch (error: any) {
+      logError('Google OAuth initiation error', error);
+      return sendError(res, 'Failed to initiate Google OAuth', undefined, 500);
+    }
+  }
+);
+
+/**
+ * Google OAuth callback controller
+ * Handles Google OAuth callback and completes authentication
+ */
+export const googleOAuthCallbackController = asyncErrorHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { code, error, state } = req.query;
+
+    logInfo('Google OAuth callback received', { 
+      hasCode: !!code, 
+      hasError: !!error, 
+      state 
+    });
+
+    // Handle OAuth error
+    if (error) {
+      logError('Google OAuth error', { error, state });
+      return sendError(res, `Google OAuth error: ${error}`, undefined, 400);
+    }
+
+    // Validate authorization code
+    if (!code || typeof code !== 'string') {
+      logError('Missing or invalid authorization code');
+      return sendError(res, 'Missing or invalid authorization code', undefined, 400);
+    }
+
+    try {
+      // Complete OAuth flow
+      const result = await completeGoogleOAuth(code);
+
+      // Update last login timestamp
+      await updateUserLastLogin(result.user.id);
+
+      logInfo('Google OAuth completed successfully', { 
+        userId: result.user.id, 
+        email: result.user.email,
+        isNewUser: result.isNewUser 
+      });
+
+      // Return success response with user data and token
+      return sendSuccess(res, 
+        result.isNewUser ? 'Account created and logged in successfully' : 'Logged in successfully', 
+        {
+          user: result.user,
+          token: result.token,
+          isNewUser: result.isNewUser,
+        }
+      );
+    } catch (error: any) {
+      logError('Google OAuth callback error', error);
+      
+      // Handle specific error types
+      if (error.statusCode === 400) {
+        return sendError(res, error.message, undefined, 400);
+      }
+      
+      return sendError(res, 'Google OAuth authentication failed', undefined, 500);
     }
   }
 );

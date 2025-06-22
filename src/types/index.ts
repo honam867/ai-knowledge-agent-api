@@ -60,6 +60,20 @@ export interface RegisterDTO {
   name: string;
 }
 
+// Google OAuth Types
+export interface GoogleOAuthDTO {
+  code: string;
+  state?: string;
+}
+
+export interface GoogleUserProfile {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  email_verified: boolean;
+}
+
 // AI Service Types
 export interface AIPromptRequest {
   prompt: string;
@@ -92,6 +106,11 @@ export interface EnvConfig {
   jwtExpiresIn: string;
   database: DatabaseConfig;
   googleApiKey: string;
+  googleOAuth: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+  };
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
   logLevel: string;

@@ -17,6 +17,11 @@ export const createEnvConfig = (): EnvConfig => ({
     url: process.env.DATABASE_URL || '',
   },
   googleApiKey: process.env.GOOGLE_API_KEY || '',
+  googleOAuth: {
+    clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback',
+  },
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
