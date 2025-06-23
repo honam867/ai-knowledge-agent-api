@@ -3,6 +3,7 @@ import { InferInsertModel, InferSelectModel, relations } from 'drizzle-orm';
 
 // Enums for better type safety
 export const authProviderEnum = pgEnum('auth_provider', ['email', 'google']);
+export const userRoleEnum = pgEnum('user_role', ['employee', 'admin']);
 export const documentStatusEnum = pgEnum('document_status', ['uploading', 'processing', 'ready', 'error']);
 export const fileTypeEnum = pgEnum('file_type', ['pdf', 'docx', 'md', 'txt']);
 export const messageRoleEnum = pgEnum('message_role', ['user', 'assistant']);
@@ -11,7 +12,7 @@ export const processingStatusEnum = pgEnum('processing_status', ['pending', 'pro
 
 /**
  * Users table schema
- * Enhanced user schema with OAuth support and email verification
+ * Enhanced user schema with OAuth support, email verification, and role-based access
  */
 export const usersTable = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -19,6 +20,7 @@ export const usersTable = pgTable('users', {
   name: varchar('name', { length: 255 }).notNull(),
   avatarUrl: varchar('avatar_url', { length: 500 }),
   provider: authProviderEnum('provider').default('email').notNull(),
+  role: userRoleEnum('role').default('employee').notNull(),
   emailVerified: boolean('email_verified').default(false).notNull(),
   password: varchar('password', { length: 255 }), // Optional for OAuth users
   createdAt: timestamp('created_at').defaultNow().notNull(),
