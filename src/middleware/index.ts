@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
 import { config } from '../config';
 import { createRequestLogger } from '../utils/logger';
 import { createErrorHandler } from '../utils/error';
@@ -157,14 +158,19 @@ export const createTimeoutMiddleware = (timeoutMs: number = 30000) => {
 
 /**
  * Creates JWT authentication middleware
- * Function for JWT token verification
+ * Function for JWT token verification from cookies or headers
  */
 export const createJwtAuthMiddleware = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.startsWith('Bearer ') 
-      ? authHeader.substring(7) 
-      : null;
+    // Try to get token from cookie first, then fallback to Authorization header
+    let token = req.cookies?.auth_token;
+    
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      token = authHeader && authHeader.startsWith('Bearer ') 
+        ? authHeader.substring(7) 
+        : null;
+    }
 
     if (!token) {
       return sendError(res, 'Access token is required', undefined, 401);
@@ -199,14 +205,19 @@ export const createJwtAuthMiddleware = () => {
 
 /**
  * Creates optional JWT authentication middleware
- * Function for optional JWT token verification (doesn't fail if no token)
+ * Function for optional JWT token verification from cookies or headers (doesn't fail if no token)
  */
 export const createOptionalJwtAuthMiddleware = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.startsWith('Bearer ') 
-      ? authHeader.substring(7) 
-      : null;
+    // Try to get token from cookie first, then fallback to Authorization header
+    let token = req.cookies?.auth_token;
+    
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      token = authHeader && authHeader.startsWith('Bearer ') 
+        ? authHeader.substring(7) 
+        : null;
+    }
 
     if (token) {
       try {
@@ -220,6 +231,14 @@ export const createOptionalJwtAuthMiddleware = () => {
 
     next();
   };
+};
+
+/**
+ * Creates cookie parser middleware
+ * Function for cookie parsing configuration
+ */
+export const createCookieParserMiddleware = () => {
+  return cookieParser();
 };
 
 /**
@@ -238,6 +257,9 @@ export const applyCommonMiddleware = (app: any) => {
   
   // Request parsing
   app.use(...createRequestParser());
+  
+  // Cookie parsing
+  app.use(createCookieParserMiddleware());
   
   // Request tracking
   app.use(createRequestIdMiddleware());
