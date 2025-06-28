@@ -153,3 +153,6 @@ export interface LogContext {
   meta?: Record<string, unknown>;
   [key: string]: unknown;
 }
+
+// Re-export upload types
+export * from './upload';

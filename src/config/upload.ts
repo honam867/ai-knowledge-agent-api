@@ -2,7 +2,7 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { config } from './index';
-import { logInfo, logError } from '../utils/logger';
+import { logInfo, logError } from '@/utils/logger';
 import _ from 'lodash';
 
 // Configure Cloudinary
@@ -31,12 +31,12 @@ const storage = new CloudinaryStorage({
   params: (req, file) => {
     // Get file extension from original filename
     const extension = file.originalname.split('.').pop()?.toLowerCase() || 'bin';
-    
+
     // Generate unique filename with timestamp (WITHOUT extension for public_id)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const originalName = _.kebabCase(file.originalname.split('.')[0]);
     const filenameWithoutExt = `${timestamp}-${originalName}`;
-    
+
     const uploadParams = {
       folder: 'ai-knowledge-agent/documents',
       resource_type: 'raw' as const,
@@ -44,15 +44,15 @@ const storage = new CloudinaryStorage({
       use_filename: false,
       unique_filename: false,
       format: extension,
-      upload_preset: config.cloudinary.uploadPreset || 'raw_file_upload',
+      upload_preset: config.cloudinary.uploadPreset,
     };
-    
+
     logInfo('Cloudinary upload params', {
       originalName: file.originalname,
       generatedPublicId: filenameWithoutExt,
       mimetype: file.mimetype,
       extension,
-      uploadParams
+      uploadParams,
     });
 
     return uploadParams;
@@ -73,7 +73,9 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
       mimetype: file.mimetype,
       originalName: file.originalname,
     });
-    return cb(new Error(`File type not supported. Supported types: ${SUPPORTED_FILE_TYPES.join(', ')}`));
+    return cb(
+      new Error(`File type not supported. Supported types: ${SUPPORTED_FILE_TYPES.join(', ')}`)
+    );
   }
 
   // Accept the file
@@ -114,13 +116,13 @@ export const deleteFromCloudinary = async (publicId: string): Promise<boolean> =
   try {
     // Try different resource types since files might be uploaded as different types
     const resourceTypes = ['auto', 'raw', 'image'] as const;
-    
+
     for (const resourceType of resourceTypes) {
       try {
         const result = await cloudinary.uploader.destroy(publicId, {
           resource_type: resourceType,
         });
-        
+
         if (result.result === 'ok') {
           logInfo('File deleted from Cloudinary', {
             publicId,
@@ -134,7 +136,7 @@ export const deleteFromCloudinary = async (publicId: string): Promise<boolean> =
         continue;
       }
     }
-    
+
     logError('Failed to delete file from Cloudinary - not found in any resource type', {
       publicId,
     });
@@ -153,13 +155,13 @@ export const getCloudinaryFileInfo = async (publicId: string) => {
   try {
     // Try different resource types to find the file
     const resourceTypes = ['auto', 'raw', 'image'] as const;
-    
+
     for (const resourceType of resourceTypes) {
       try {
         const result = await cloudinary.api.resource(publicId, {
           resource_type: resourceType,
         });
-        
+
         return {
           publicId: result.public_id,
           secureUrl: result.secure_url,
@@ -173,7 +175,7 @@ export const getCloudinaryFileInfo = async (publicId: string) => {
         continue;
       }
     }
-    
+
     logError('File not found in Cloudinary', { publicId });
     return null;
   } catch (error) {
@@ -191,4 +193,4 @@ export const UPLOAD_CONFIG = {
   MAX_FILE_SIZE,
   MAX_FILES_SINGLE: 1,
   MAX_FILES_MULTIPLE: 5,
-} as const; 
+} as const;

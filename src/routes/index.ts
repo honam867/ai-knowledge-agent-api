@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { testingRoutes } from './testing.routes';
+// import { testingRoutes } from './testing.routes';
 import { authRoutes } from './auth.routes';
 import { uploadRoutes } from './upload.routes';
 import { healthCheckMiddleware } from '../middleware';
@@ -27,9 +27,8 @@ export const createAPIRoutes = (): Router => {
         endpoints: {
           health: '/api/health',
           auth: '/api/auth',
-          testing: '/api/testing',
+          // testing: '/api/testing',
           upload: '/api/upload',
-          ai: '/api/ai (coming soon)',
         },
         documentation: 'https://github.com/your-repo/api-docs',
         timestamp: new Date().toISOString(),
@@ -37,12 +36,12 @@ export const createAPIRoutes = (): Router => {
       timestamp: new Date().toISOString(),
     });
   });
-  
+
   // Mount route modules
   router.use('/auth', authRoutes);
-  router.use('/testing', testingRoutes);
+  // router.use('/testing', testingRoutes);
   router.use('/upload', uploadRoutes);
-  
+
   return router;
 };
 

@@ -1,15 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { sendSuccess, sendError } from '../utils/response';
-import { logInfo, logError } from '../utils/logger';
-import { LoginDTO, RegisterDTO, TypedRequest, GoogleOAuthDTO } from '../types';
-import { asyncErrorHandler } from '../utils/error';
-import {
-  registerUser,
-  loginUser,
-  getUserById,
-  updateUserLastLogin,
-} from '../services/auth.service';
-import { generateGoogleAuthUrl, completeGoogleOAuth } from '../services/google-oauth.service';
+import { sendSuccess, sendError } from '@/utils/response';
+import { logInfo, logError } from '@/utils/logger';
+import { LoginDTO, RegisterDTO, TypedRequest, GoogleOAuthDTO, AuthenticatedRequest } from '@/types';
+import { asyncErrorHandler } from '@/utils/error';
+import { registerUser, loginUser, getUserById, updateUserLastLogin } from '@/services/auth.service';
+import { generateGoogleAuthUrl, completeGoogleOAuth } from '@/services/google-oauth.service';
 
 const clientUrl = process.env.CLIENT_URL;
 
@@ -163,8 +158,8 @@ export const refreshTokenController = asyncErrorHandler(
  * Logs out user (client-side token removal)
  */
 export const logoutController = asyncErrorHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const userId = req.user?.id;
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = (req as AuthenticatedRequest).user?.id;
 
     if (userId) {
       logInfo('User logged out', { userId });
@@ -196,7 +191,7 @@ export const logoutController = asyncErrorHandler(
  * Returns current authenticated user's profile
  */
 export const getCurrentUserController = asyncErrorHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const userId = req.user?.id;
 
     if (!userId) {

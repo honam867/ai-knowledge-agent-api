@@ -1,273 +1,205 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { uploadService } from '@/services/upload.service';
 import { sendSuccess, sendError } from '@/utils/response';
 import { logInfo, logError } from '@/utils/logger';
-import _ from 'lodash';
+import { asyncErrorHandler } from '@/utils/error';
+import { pick } from 'lodash';
+import {
+  AuthenticatedRequest,
+  UploadFile,
+  UploadController,
+  UploadRequestBody,
+  ListUploadsQuery,
+  UploadParams,
+} from '@/types/upload';
 
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-  };
-}
+export const uploadController: UploadController = {
+  uploadPublic: asyncErrorHandler(async (req, res: Response) => {
+    logInfo('Public upload request received');
 
-interface UploadFile extends Express.Multer.File {
-  path: string;
-  filename: string;
-}
-
-/**
- * Upload Controller
- * Handles file upload operations with functional approach
- */
-export const uploadController = {
-  /**
-   * Handle public file upload (anonymous users)
-   * POST /api/upload/public
-   */
-  uploadPublic: async (req: Request, res: Response) => {
-    try {
-      logInfo('Public upload request received');
-
-      // Check if file was uploaded
-      if (!req.file) {
-        return sendError(res, '', 'No file uploaded', 400);
-      }
-
-      const file = req.file as UploadFile;
-      const metadata = _.pick(req.body, ['title', 'description', 'tags']);
-
-      // Process the upload
-      const result = await uploadService.handlePublicUpload(file, metadata);
-
-      logInfo('Public upload successful', { documentId: result.id });
-
-      return sendSuccess(res, 'File uploaded successfully', result);
-    } catch (error) {
-      logError('Public upload failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      return sendError(res, error instanceof Error ? error.message : 'Upload failed', '', 500);
+    if (!req.file) {
+      return sendError(res, '', 'No file uploaded', 400);
     }
-  },
 
-  /**
-   * Handle authenticated file upload (logged-in users)
-   * POST /api/upload/private
-   */
-  uploadPrivate: async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      logInfo('Private upload request received', { userId: req.user?.id });
-      if (!req.user) {
-        return sendError(res, '', 'Authentication required', 401);
-      }
+    const file = req.file as UploadFile;
+    const metadata = pick(req.body as UploadRequestBody, ['title', 'description', 'tags']);
+    const result = await uploadService.handlePublicUpload(file, metadata);
 
-      if (!req.file) {
-        return sendError(res, '', 'No file uploaded', 400);
-      }
+    if (!result.success || !result.data) {
+      logError('Public upload failed', { error: result.error?.message });
+      return sendError(res, result.error?.message || 'Upload failed', '', 500);
+    }
 
-      const file = req.file as UploadFile;
-      const metadata = _.pick(req.body, ['title', 'description', 'tags']);
+    logInfo('Public upload successful', { documentId: result.data.id });
+    return sendSuccess(res, 'File uploaded successfully', result.data);
+  }),
 
-      const result = await uploadService.handlePrivateUpload(file, req.user.id, metadata);
+  uploadPrivate: asyncErrorHandler(async (req: AuthenticatedRequest, res: Response) => {
+    logInfo('Private upload request received', { userId: req.user?.id });
 
-      logInfo('Private upload successful', {
-        documentId: result.id,
-        userId: req.user.id,
-      });
+    if (!req.user) {
+      return sendError(res, '', 'Authentication required', 401);
+    }
 
-      return sendSuccess(res, 'File uploaded successfully', result);
-    } catch (error) {
+    if (!req.file) {
+      return sendError(res, '', 'No file uploaded', 400);
+    }
+
+    const file = req.file as UploadFile;
+    const metadata = pick(req.body as UploadRequestBody, ['title', 'description', 'tags']);
+    const result = await uploadService.handlePrivateUpload(file, req.user.id, metadata);
+
+    if (!result.success || !result.data) {
       logError('Private upload failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.user?.id,
+        error: result.error?.message,
+        userId: req.user.id,
       });
-      return sendError(res, error instanceof Error ? error.message : 'Upload failed', '', 500);
+      return sendError(res, result.error?.message || 'Upload failed', '', 500);
     }
-  },
 
-  /**
-   * Get upload by ID
-   * GET /api/upload/:id
-   */
-  getUploadById: async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
+    logInfo('Private upload successful', {
+      documentId: result.data.id,
+      userId: req.user.id,
+    });
+    return sendSuccess(res, 'File uploaded successfully', result.data);
+  }),
 
-      if (!id) {
-        return sendError(res, '', 'Upload ID is required', 400);
-      }
+  getUploadById: asyncErrorHandler(async (req, res: Response) => {
+    const { id } = req.params as unknown as UploadParams;
 
-      const document = await uploadService.getDocumentById(id);
+    if (!id) {
+      return sendError(res, '', 'Upload ID is required', 400);
+    }
 
-      if (!document) {
-        return sendError(res, '', 'Document not found', 404);
-      }
+    const result = await uploadService.getDocumentById(id);
 
-      return sendSuccess(res, 'Document retrieved successfully', document);
-    } catch (error) {
+    if (!result.success) {
       logError('Get upload failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        uploadId: req.params.id,
+        error: result.error?.message,
+        uploadId: id,
       });
-      return sendError(
-        res,
-        error instanceof Error ? error.message : 'Failed to retrieve document',
-        '',
-        500
-      );
+      return sendError(res, result.error?.message || 'Failed to retrieve document', '', 500);
     }
-  },
 
-  /**
-   * List uploads for authenticated user
-   * GET /api/upload/
-   */
-  listUploads: async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      if (!req.user) {
-        return sendError(res, '', 'Authentication required', 401);
-      }
+    if (!result.data) {
+      return sendError(res, '', 'Document not found', 404);
+    }
 
-      const { page = '1', limit = '10', status, fileType } = req.query;
+    return sendSuccess(res, 'Document retrieved successfully', result.data);
+  }),
 
-      const filters = {
-        userId: req.user.id,
-        status: status as string,
-        fileType: fileType as string,
-        page: parseInt(page as string, 10),
-        limit: parseInt(limit as string, 10),
-      };
+  listUploads: asyncErrorHandler(async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      return sendError(res, '', 'Authentication required', 401);
+    }
 
-      const result = await uploadService.listDocuments(filters);
+    const { page = '1', limit = '10', status, fileType } = req.query as ListUploadsQuery;
 
-      return sendSuccess(res, 'Documents retrieved successfully', result);
-    } catch (error) {
+    const filters = {
+      userId: req.user.id,
+      status,
+      fileType,
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+    };
+
+    const result = await uploadService.listDocuments(filters);
+
+    if (!result.success || !result.data) {
       logError('List uploads failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.user?.id,
-      });
-      return sendError(
-        res,
-        error instanceof Error ? error.message : 'Failed to retrieve documents',
-        '',
-        500
-      );
-    }
-  },
-
-  /**
-   * Handle multiple public file uploads (anonymous users)
-   * POST /api/upload/public/multiple
-   */
-  uploadPublicMultiple: async (req: Request, res: Response) => {
-    try {
-      logInfo('Multiple public upload request received');
-
-      // Check if files were uploaded
-      if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
-        return sendError(res, '', 'No files uploaded', 400);
-      }
-
-      const files = req.files as UploadFile[];
-      const metadata = _.pick(req.body, ['title', 'description', 'tags']);
-
-      // Process the multiple uploads
-      const result = await uploadService.handlePublicMultipleUpload(files, metadata);
-
-      logInfo('Multiple public upload completed', {
-        total: result.summary.total,
-        successful: result.summary.successful,
-        failed: result.summary.failed,
-      });
-
-      return sendSuccess(res, 'Files processed', result);
-    } catch (error) {
-      logError('Multiple public upload failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      return sendError(res, error instanceof Error ? error.message : 'Upload failed', '', 500);
-    }
-  },
-
-  /**
-   * Handle multiple authenticated file uploads (logged-in users)
-   * POST /api/upload/private/multiple
-   */
-  uploadPrivateMultiple: async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      logInfo('Multiple private upload request received', { userId: req.user?.id });
-
-      // Check if user is authenticated
-      if (!req.user) {
-        return sendError(res, '', 'Authentication required', 401);
-      }
-
-      // Check if files were uploaded
-      if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
-        return sendError(res, '', 'No files uploaded', 400);
-      }
-
-      const files = req.files as UploadFile[];
-      const metadata = _.pick(req.body, ['title', 'description', 'tags']);
-
-      // Process the multiple uploads with user association
-      const result = await uploadService.handlePrivateMultipleUpload(files, req.user.id, metadata);
-
-      logInfo('Multiple private upload completed', {
-        total: result.summary.total,
-        successful: result.summary.successful,
-        failed: result.summary.failed,
+        error: result.error?.message,
         userId: req.user.id,
       });
+      return sendError(res, result.error?.message || 'Failed to retrieve documents', '', 500);
+    }
 
-      return sendSuccess(res, 'Files processed', result);
-    } catch (error) {
+    return sendSuccess(res, 'Documents retrieved successfully', result.data);
+  }),
+
+  uploadPublicMultiple: asyncErrorHandler(async (req, res: Response) => {
+    logInfo('Multiple public upload request received');
+
+    if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+      return sendError(res, '', 'No files uploaded', 400);
+    }
+
+    const files = req.files as UploadFile[];
+    const metadata = pick(req.body as UploadRequestBody, ['title', 'description', 'tags']);
+    const result = await uploadService.handlePublicMultipleUpload(files, metadata);
+
+    if (!result.success || !result.data) {
+      logError('Multiple public upload failed', { error: result.error?.message });
+      return sendError(res, result.error?.message || 'Upload failed', '', 500);
+    }
+
+    logInfo('Multiple public upload completed', {
+      total: result.data.summary.total,
+      successful: result.data.summary.successful,
+      failed: result.data.summary.failed,
+    });
+
+    return sendSuccess(res, 'Files processed', result.data);
+  }),
+
+  uploadPrivateMultiple: asyncErrorHandler(async (req: AuthenticatedRequest, res: Response) => {
+    logInfo('Multiple private upload request received', { userId: req.user?.id });
+
+    if (!req.user) {
+      return sendError(res, '', 'Authentication required', 401);
+    }
+
+    if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+      return sendError(res, '', 'No files uploaded', 400);
+    }
+
+    const files = req.files as UploadFile[];
+    const metadata = pick(req.body as UploadRequestBody, ['title', 'description', 'tags']);
+    const result = await uploadService.handlePrivateMultipleUpload(files, req.user.id, metadata);
+
+    if (!result.success || !result.data) {
       logError('Multiple private upload failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.user?.id,
+        error: result.error?.message,
+        userId: req.user.id,
       });
-      return sendError(res, error instanceof Error ? error.message : 'Upload failed', '', 500);
+      return sendError(res, result.error?.message || 'Upload failed', '', 500);
     }
-  },
 
-  /**
-   * Delete upload by ID
-   * DELETE /api/upload/:id
-   */
-  deleteUpload: async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      if (!req.user) {
-        return sendError(res, '', 'Authentication required', 401);
-      }
+    logInfo('Multiple private upload completed', {
+      total: result.data.summary.total,
+      successful: result.data.summary.successful,
+      failed: result.data.summary.failed,
+      userId: req.user.id,
+    });
 
-      const { id } = req.params;
+    return sendSuccess(res, 'Files processed', result.data);
+  }),
 
-      if (!id) {
-        return sendError(res, '', 'Upload ID is required', 400);
-      }
+  deleteUpload: asyncErrorHandler(async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      return sendError(res, '', 'Authentication required', 401);
+    }
 
-      const result = await uploadService.deleteDocument(id, req.user.id);
+    const { id } = req.params as unknown as UploadParams;
 
-      if (!result.success) {
-        return sendError(res, result.message, '', result.status || 400);
-      }
+    if (!id) {
+      return sendError(res, '', 'Upload ID is required', 400);
+    }
 
-      return sendSuccess(res, 'Document deleted successfully', { deleted: true });
-    } catch (error) {
+    const result = await uploadService.deleteDocument(id, req.user.id);
+
+    if (!result.success || !result.data) {
       logError('Delete upload failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        uploadId: req.params.id,
-        userId: req.user?.id,
+        error: result.error?.message,
+        uploadId: id,
+        userId: req.user.id,
       });
-      return sendError(
-        res,
-        error instanceof Error ? error.message : 'Failed to delete document',
-        '',
-        500
-      );
+      return sendError(res, result.error?.message || 'Failed to delete document', '', 500);
     }
-  },
+
+    if (!result.data.success) {
+      return sendError(res, result.data.message, '', result.data.status || 400);
+    }
+
+    return sendSuccess(res, 'Document deleted successfully', { deleted: true });
+  }),
 };

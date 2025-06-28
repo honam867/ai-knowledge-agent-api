@@ -3,197 +3,123 @@ import { documentsTable, documentProcessingTable } from '@/db/schema';
 import { eq, and, desc, count } from 'drizzle-orm';
 import { deleteFromCloudinary } from '@/config/upload';
 import { logInfo, logError } from '@/utils/logger';
-import _ from 'lodash';
+import { safeAsync } from '@/utils/error';
+import { get } from 'lodash';
+import {
+  UploadFile,
+  UploadMetadata,
+  DocumentFilters,
+  DocumentResponse,
+  DocumentRecord,
+  ListDocumentsResponse,
+  MultipleUploadResponse,
+  DeleteDocumentResponse,
+  ServiceResult,
+  UploadServiceMethods,
+  FileType,
+  UploadError,
+} from '@/types/upload';
 
-interface UploadFile {
-  originalname: string;
-  mimetype: string;
-  size: number;
-  filename: string;
-  path: string;
-  public_id: string;
-  secure_url: string;
-  resource_type: string;
-  format: string;
-  bytes: number;
-  folder: string;
-  [key: string]: any;
-}
-
-interface UploadMetadata {
-  title?: string;
-  description?: string;
-  tags?: string[];
-  cloudinary?: {
-    publicId: string;
-    secureUrl: string;
-    folder: string;
-    resourceType: string;
-    format: string;
-    bytes: number;
-    [key: string]: any;
+const extractFileType = (mimetype: string): FileType => {
+  const typeMap: Record<string, FileType> = {
+    'application/pdf': 'pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/msword': 'docx',
+    'text/markdown': 'md',
+    'text/plain': 'txt',
+    'application/rtf': 'txt',
   };
-  [key: string]: any;
-}
 
-interface DocumentFilters {
-  userId?: string;
-  status?: string;
-  fileType?: string;
-  page: number;
-  limit: number;
-}
+  return typeMap[mimetype] || 'txt';
+};
 
-/**
- * Upload Service
- * Handles file upload business logic with functional approach
- */
-export const uploadService = {
-  /**
-   * Handle public file upload (anonymous users)
-   */
-  handlePublicUpload: async (file: UploadFile, metadata: UploadMetadata = {}) => {
-    try {
-      // Extract file type from mimetype
-      const fileType = uploadService.extractFileType(file.mimetype);
+const createDocumentRecord = async (
+  file: UploadFile,
+  userId: string | null,
+  metadata: UploadMetadata
+): Promise<DocumentRecord> => {
+  const fileType = extractFileType(file.mimetype);
+  const enhancedMetadata = {
+    ...metadata,
+    ...file,
+    public_id: file.filename,
+  };
 
-      // Prepare metadata with Cloudinary information
-      const enhancedMetadata = {
-        ...metadata,
-        ...file,
-        public_id: file.filename,
-      };
+  const [document] = await db
+    .insert(documentsTable)
+    .values({
+      userId,
+      filename: file.filename,
+      originalName: file.originalname,
+      fileType,
+      fileSize: file.size,
+      uploadPath: file.path,
+      status: 'uploading',
+      metadata: enhancedMetadata,
+    })
+    .returning();
 
-      // Create document record without userId (public upload)
-      const [document] = await db
-        .insert(documentsTable)
-        .values({
-          userId: null, // Public uploads have no associated user
-          filename: file.filename,
-          originalName: file.originalname,
-          fileType: fileType,
-          fileSize: file.size,
-          uploadPath: file.path,
-          status: 'uploading',
-          metadata: enhancedMetadata,
-        })
-        .returning();
+  await db.insert(documentProcessingTable).values({
+    documentId: document.id,
+    stage: 'upload',
+    status: 'success',
+  });
 
-      // Create initial processing record
-      await db.insert(documentProcessingTable).values({
-        documentId: document.id,
-        stage: 'upload',
-        status: 'success',
-      });
+  await db
+    .update(documentsTable)
+    .set({
+      status: 'ready',
+      updatedAt: new Date(),
+    })
+    .where(eq(documentsTable.id, document.id));
 
-      // Update document status to ready (for now, later we'll add actual processing)
-      await db
-        .update(documentsTable)
-        .set({
-          status: 'ready',
-          updatedAt: new Date(),
-        })
-        .where(eq(documentsTable.id, document.id));
+  return document as DocumentRecord;
+};
+
+const formatDocumentResponse = (document: DocumentRecord, isPrivate: boolean = false): DocumentResponse => ({
+  id: document.id,
+  filename: document.filename,
+  originalName: document.originalName,
+  fileType: document.fileType,
+  fileSize: document.fileSize,
+  status: document.status || 'ready',
+  uploadPath: document.uploadPath,
+  metadata: document.metadata,
+  ...(isPrivate && { userId: document.userId }),
+  createdAt: document.createdAt,
+  isPublic: !document.userId,
+});
+
+export const uploadService: UploadServiceMethods = {
+  handlePublicUpload: async (
+    file: UploadFile, 
+    metadata: UploadMetadata = {}
+  ): Promise<ServiceResult<DocumentResponse>> => {
+    return safeAsync(async () => {
+      const document = await createDocumentRecord(file, null, metadata);
 
       logInfo('Public upload completed', { documentId: document.id });
 
-      return {
-        id: document.id,
-        filename: document.filename,
-        originalName: document.originalName,
-        fileType: document.fileType,
-        fileSize: document.fileSize,
-        status: 'ready',
-        uploadPath: document.uploadPath,
-        metadata: document.metadata,
-        createdAt: document.createdAt,
-        isPublic: true,
-      };
-    } catch (error) {
-      logError('Public upload processing failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        filename: file.originalname,
-      });
-      throw error;
-    }
+      return formatDocumentResponse(document);
+    });
   },
 
-  /**
-   * Handle private file upload (authenticated users)
-   */
-  handlePrivateUpload: async (file: UploadFile, userId: string, metadata: UploadMetadata = {}) => {
-    try {
-      // Extract file type from mimetype
-      const fileType = uploadService.extractFileType(file.mimetype);
-
-      // Prepare metadata with Cloudinary information
-      const enhancedMetadata = {
-        ...metadata,
-        ...file,
-        public_id: file.filename,
-      };
-
-      // Create document record with userId
-      const [document] = await db
-        .insert(documentsTable)
-        .values({
-          userId: userId,
-          filename: file.filename,
-          originalName: file.originalname,
-          fileType: fileType,
-          fileSize: file.size,
-          uploadPath: file.path,
-          status: 'uploading',
-          metadata: enhancedMetadata,
-        })
-        .returning();
-
-      // Create initial processing record
-      await db.insert(documentProcessingTable).values({
-        documentId: document.id,
-        stage: 'upload',
-        status: 'success',
-      });
-
-      // Update document status to ready (for now, later we'll add actual processing)
-      await db
-        .update(documentsTable)
-        .set({
-          status: 'ready',
-          updatedAt: new Date(),
-        })
-        .where(eq(documentsTable.id, document.id));
+  handlePrivateUpload: async (
+    file: UploadFile, 
+    userId: string, 
+    metadata: UploadMetadata = {}
+  ): Promise<ServiceResult<DocumentResponse>> => {
+    return safeAsync(async () => {
+      const document = await createDocumentRecord(file, userId, metadata);
 
       logInfo('Private upload completed', { documentId: document.id, userId });
 
-      return {
-        id: document.id,
-        filename: document.filename,
-        originalName: document.originalName,
-        fileType: document.fileType,
-        fileSize: document.fileSize,
-        status: 'ready',
-        uploadPath: document.uploadPath,
-        metadata: document.metadata,
-        userId: document.userId,
-        createdAt: document.createdAt,
-        isPublic: false,
-      };
-    } catch (error) {
-      logError('Private upload processing failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        filename: file.originalname,
-        userId,
-      });
-      throw error;
-    }
+      return formatDocumentResponse(document, true);
+    });
   },
 
-  /**
-   * Get document by ID
-   */
-  getDocumentById: async (documentId: string) => {
-    try {
+  getDocumentById: async (documentId: string): Promise<ServiceResult<DocumentResponse | null>> => {
+    return safeAsync(async () => {
       const [document] = await db
         .select()
         .from(documentsTable)
@@ -207,49 +133,26 @@ export const uploadService = {
       return {
         ...document,
         isPublic: !document.userId,
-      };
-    } catch (error) {
-      logError('Get document by ID failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        documentId,
-      });
-      throw error;
-    }
+      } as DocumentResponse;
+    });
   },
 
-  /**
-   * List documents with filtering and pagination
-   */
-  listDocuments: async (filters: DocumentFilters) => {
-    try {
+  listDocuments: async (filters: DocumentFilters): Promise<ServiceResult<ListDocumentsResponse>> => {
+    return safeAsync(async () => {
       const { userId, status, fileType, page, limit } = filters;
-
-      // Build where conditions
       const conditions = [];
 
-      if (userId) {
-        conditions.push(eq(documentsTable.userId, userId));
-      }
-
-      if (status) {
-        conditions.push(eq(documentsTable.status, status as any));
-      }
-
-      if (fileType) {
-        conditions.push(eq(documentsTable.fileType, fileType as any));
-      }
+      if (userId) conditions.push(eq(documentsTable.userId, userId));
+      if (status) conditions.push(eq(documentsTable.status, status as any));
+      if (fileType) conditions.push(eq(documentsTable.fileType, fileType as any));
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-      // Get total count
       const [{ totalCount }] = await db
-        .select({
-          totalCount: count(documentsTable.id),
-        })
+        .select({ totalCount: count(documentsTable.id) })
         .from(documentsTable)
         .where(whereClause);
 
-      // Get paginated results
       const offset = (page - 1) * limit;
       const documents = await db
         .select()
@@ -259,10 +162,10 @@ export const uploadService = {
         .limit(limit)
         .offset(offset);
 
-      const enhancedDocuments = documents.map(doc => ({
+      const enhancedDocuments: DocumentResponse[] = documents.map(doc => ({
         ...doc,
         isPublic: !doc.userId,
-      }));
+      } as DocumentResponse));
 
       return {
         documents: enhancedDocuments,
@@ -273,25 +176,20 @@ export const uploadService = {
           pages: Math.ceil(totalCount / limit),
         },
       };
-    } catch (error) {
-      logError('List documents failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        filters,
-      });
-      throw error;
-    }
+    });
   },
 
-  /**
-   * Delete document by ID
-   */
-  deleteDocument: async (documentId: string, userId?: string) => {
-    try {
+  deleteDocument: async (
+    documentId: string, 
+    userId?: string
+  ): Promise<ServiceResult<DeleteDocumentResponse>> => {
+    return safeAsync(async () => {
       const [document] = await db
         .select()
         .from(documentsTable)
         .where(eq(documentsTable.id, documentId))
         .limit(1);
+
       if (!document) {
         return {
           success: false,
@@ -299,6 +197,7 @@ export const uploadService = {
           status: 404,
         };
       }
+
       if (userId && document.userId !== userId) {
         return {
           success: false,
@@ -306,60 +205,50 @@ export const uploadService = {
           status: 403,
         };
       }
-      const publicId = _.get(document, 'metadata.public_id', '');
-      await deleteFromCloudinary(publicId);
+
+      const publicId = get(document, 'metadata.public_id', '');
+      
+      if (publicId) {
+        await deleteFromCloudinary(publicId);
+      }
+
       await db
         .delete(documentProcessingTable)
         .where(eq(documentProcessingTable.documentId, documentId));
+
       await db.delete(documentsTable).where(eq(documentsTable.id, documentId));
+
       logInfo('Document deleted successfully', { documentId, userId, publicId });
+
       return {
         success: true,
         message: 'Document deleted successfully',
       };
-    } catch (error) {
-      logError('Delete document failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        documentId,
-        userId,
-      });
-      throw error;
-    }
-  },
-  extractFileType: (mimetype: string): 'pdf' | 'docx' | 'md' | 'txt' => {
-    const typeMap: Record<string, 'pdf' | 'docx' | 'md' | 'txt'> = {
-      'application/pdf': 'pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-      'application/msword': 'docx',
-      'text/markdown': 'md',
-      'text/plain': 'txt',
-      'application/rtf': 'txt', // Treat RTF as txt for now
-    };
-
-    return typeMap[mimetype] || 'txt';
+    });
   },
 
-  /**
-   * Handle multiple public file uploads (anonymous users)
-   */
-  handlePublicMultipleUpload: async (files: UploadFile[], metadata: UploadMetadata = {}) => {
-    try {
+  handlePublicMultipleUpload: async (
+    files: UploadFile[], 
+    metadata: UploadMetadata = {}
+  ): Promise<ServiceResult<MultipleUploadResponse>> => {
+    return safeAsync(async () => {
       logInfo('Processing multiple public uploads', {
         fileCount: files.length,
         files: files.map(f => ({ name: f.originalname, size: f.size, type: f.mimetype })),
       });
 
-      const results = [];
-      const errors = [];
+      const results: DocumentResponse[] = [];
+      const errors: UploadError[] = [];
 
       for (const file of files) {
-        try {
-          const result = await uploadService.handlePublicUpload(file, metadata);
-          results.push(result);
-        } catch (error) {
+        const result = await uploadService.handlePublicUpload(file, metadata);
+        
+        if (result.success && result.data) {
+          results.push(result.data);
+        } else {
           errors.push({
             filename: file.originalname,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: result.error?.message || 'Unknown error',
           });
         }
       }
@@ -378,41 +267,33 @@ export const uploadService = {
           failed: errors.length,
         },
       };
-    } catch (error) {
-      logError('Multiple public upload processing failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        fileCount: files.length,
-      });
-      throw error;
-    }
+    });
   },
 
-  /**
-   * Handle multiple private file uploads (authenticated users)
-   */
   handlePrivateMultipleUpload: async (
     files: UploadFile[],
     userId: string,
     metadata: UploadMetadata = {}
-  ) => {
-    try {
+  ): Promise<ServiceResult<MultipleUploadResponse>> => {
+    return safeAsync(async () => {
       logInfo('Processing multiple private uploads', {
         fileCount: files.length,
         userId,
         files: files.map(f => ({ name: f.originalname, size: f.size, type: f.mimetype })),
       });
 
-      const results = [];
-      const errors = [];
+      const results: DocumentResponse[] = [];
+      const errors: UploadError[] = [];
 
       for (const file of files) {
-        try {
-          const result = await uploadService.handlePrivateUpload(file, userId, metadata);
-          results.push(result);
-        } catch (error) {
+        const result = await uploadService.handlePrivateUpload(file, userId, metadata);
+        
+        if (result.success && result.data) {
+          results.push(result.data);
+        } else {
           errors.push({
             filename: file.originalname,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: result.error?.message || 'Unknown error',
           });
         }
       }
@@ -432,13 +313,6 @@ export const uploadService = {
           failed: errors.length,
         },
       };
-    } catch (error) {
-      logError('Multiple private upload processing failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        fileCount: files.length,
-        userId,
-      });
-      throw error;
-    }
+    });
   },
 };
