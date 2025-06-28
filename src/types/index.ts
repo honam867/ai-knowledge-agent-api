@@ -111,9 +111,16 @@ export interface EnvConfig {
     clientSecret: string;
     redirectUri: string;
   };
+  cloudinary: {
+    cloudName: string;
+    apiKey: string;
+    apiSecret: string;
+    uploadPreset?: string;
+  };
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
   logLevel: string;
+  clientUrl: string;
 }
 
 // Utility Types

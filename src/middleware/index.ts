@@ -73,8 +73,8 @@ export const createSecurityMiddleware = () => {
 export const createRequestParser = () => {
   const express = require('express');
   return [
-    express.json({ limit: '10mb' }),
-    express.urlencoded({ extended: true, limit: '10mb' }),
+    express.json({ limit: '100mb' }),
+    express.urlencoded({ extended: true, limit: '100mb' }),
   ];
 };
 

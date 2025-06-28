@@ -20,11 +20,18 @@ export const createEnvConfig = (): EnvConfig => ({
   googleOAuth: {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
     clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
-    redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback',
+    redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI,
+  },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    apiKey: process.env.CLOUDINARY_API_KEY || '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET || '',
+    uploadPreset: process.env.CLOUDINARY_UPLOAD_PRESET,
   },
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
+  clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
 });
 
 /**
@@ -36,6 +43,10 @@ export const validateEnvConfig = (config: EnvConfig): string[] => {
 
   if (!config.database.url) {
     errors.push('DATABASE_URL is required');
+  }
+
+  if (!config.clientUrl) {
+    errors.push('CLIENT_URL is required');
   }
 
   // if (!config.jwtSecret || config.jwtSecret === 'fallback-secret-key') {

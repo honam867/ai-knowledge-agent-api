@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { testingRoutes } from './testing.routes';
 import { authRoutes } from './auth.routes';
+import { uploadRoutes } from './upload.routes';
 import { healthCheckMiddleware } from '../middleware';
 
 /**
@@ -17,17 +18,18 @@ export const createAPIRoutes = (): Router => {
   router.get('/', (req, res) => {
     res.json({
       success: true,
-      message: 'Node.js API Template',
+      message: 'AI Knowledge Agent API',
       data: {
         version: '1.0.0',
-        name: 'nodejs-api-template',
+        name: 'ai-knowledge-agent-api',
         description:
-          'Scalable Node.js API with Express, TypeScript, Supabase, Drizzle ORM, and AI integration',
+          'Enterprise AI assistant with document upload, processing, and RAG-powered chat capabilities',
         endpoints: {
           health: '/api/health',
           auth: '/api/auth',
           testing: '/api/testing',
-          ai: '/api/ai',
+          upload: '/api/upload',
+          ai: '/api/ai (coming soon)',
         },
         documentation: 'https://github.com/your-repo/api-docs',
         timestamp: new Date().toISOString(),
@@ -39,6 +41,7 @@ export const createAPIRoutes = (): Router => {
   // Mount route modules
   router.use('/auth', authRoutes);
   router.use('/testing', testingRoutes);
+  router.use('/upload', uploadRoutes);
   
   return router;
 };

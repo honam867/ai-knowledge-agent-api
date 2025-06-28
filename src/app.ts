@@ -4,6 +4,7 @@ import { applyCommonMiddleware, applyErrorMiddleware } from './middleware';
 import { appRoutes } from './routes';
 import logger from '@/utils/logger';
 import { createSafeErrorObject } from './utils/error';
+import _ from 'lodash';
 
 /**
  * Creates Express application with functional composition
@@ -76,7 +77,7 @@ export const startServer = async (app: express.Application, port: number) => {
 
     // Handle unhandled promise rejections (log but don't crash for non-critical errors)
     process.on('unhandledRejection', (reason, promise) => {
-      const errorStr = reason?.toString() || 'Unknown rejection';
+      const errorStr = _.get(reason, 'message') || 'Unknown rejection';
       // Check if it's a critical error that should crash the app
       const isCritical =
         errorStr.includes('ECONNREFUSED') || // Database connection refused

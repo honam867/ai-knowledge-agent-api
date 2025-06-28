@@ -30,10 +30,11 @@ export const usersTable = pgTable('users', {
 /**
  * Documents table schema
  * Stores uploaded documents with metadata and processing status
+ * Updated to allow null userId for public uploads
  */
 export const documentsTable = pgTable('documents', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull().references(() => usersTable.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => usersTable.id, { onDelete: 'cascade' }), // Removed notNull() to allow public uploads
   filename: varchar('filename', { length: 255 }).notNull(),
   originalName: varchar('original_name', { length: 255 }).notNull(),
   fileType: fileTypeEnum('file_type').notNull(),

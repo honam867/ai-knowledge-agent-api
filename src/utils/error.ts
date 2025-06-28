@@ -75,14 +75,14 @@ export const isOperationalError = (error: Error): boolean => {
  * Extracts error message safely
  * Pure function for error message extraction
  */
-export const getErrorMessage = (error: unknown): string => {
+export const getErrorMessage = (error: unknown): any => {
   if (error instanceof Error) {
     return error.message;
   }
   if (typeof error === 'string') {
     return error;
   }
-  return 'An unknown error occurred';
+  return error.message || 'An unknown error occurred';
 };
 
 /**
@@ -111,11 +111,9 @@ export const createSafeErrorObject = (error: unknown) => ({
  * Wraps async functions with error handling
  * Higher-order function for async error handling
  */
-export const asyncErrorHandler = <T extends any[], R>(
-  fn: (...args: T) => Promise<R>
-) => {
+export const asyncErrorHandler = <T extends any[], R>(fn: (...args: T) => Promise<R>) => {
   return (...args: T): Promise<R> => {
-    return fn(...args).catch((error) => {
+    return fn(...args).catch(error => {
       throw isOperationalError(error) ? error : createInternalServerError(getErrorMessage(error));
     });
   };
@@ -132,7 +130,7 @@ export const safeAsync = <T>(
     .then(data => ({ success: true as const, data }))
     .catch(error => ({
       success: false as const,
-      error: isOperationalError(error) ? error : createInternalServerError(getErrorMessage(error))
+      error: isOperationalError(error) ? error : createInternalServerError(getErrorMessage(error)),
     }));
 };
 
@@ -145,11 +143,12 @@ export const createErrorHandler = () => {
     const appError = error as AppError;
     const statusCode = appError.statusCode || 500;
     const message = appError.message || 'Internal Server Error';
-    
+    console.log('❤️ ~ return ~ message:', message);
+
     // Log error details
     const errorDetails = createSafeErrorObject(error);
-    console.error('Error Details:', errorDetails);
-    
+    console.error('❓❌ Error Details:', errorDetails);
+
     // Send error response
     res.status(statusCode).json({
       success: false,
@@ -158,4 +157,4 @@ export const createErrorHandler = () => {
       timestamp: new Date().toISOString(),
     });
   };
-}; 
+};
