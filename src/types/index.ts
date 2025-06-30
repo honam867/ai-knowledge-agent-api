@@ -121,6 +121,8 @@ export interface EnvConfig {
   rateLimitMaxRequests: number;
   logLevel: string;
   clientUrl: string;
+  ocrApiUrl: string;
+  ocrApiTimeout: number;
 }
 
 // Utility Types

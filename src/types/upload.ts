@@ -145,6 +145,50 @@ export interface ServiceResult<T> {
   error?: Error;
 }
 
+// Language mapping from Franc (ISO 639-3) codes to Tesseract.js language codes
+export const LANGUAGE_MAPPING: Record<string, string> = {
+  'eng': 'eng',     // English
+  'vie': 'vie',     // Vietnamese
+  'spa': 'spa',     // Spanish
+  'fra': 'fra',     // French
+  'deu': 'ger',     // German (Tesseract uses 'ger')
+  'ita': 'ita',     // Italian
+  'por': 'por',     // Portuguese
+  'rus': 'rus',     // Russian
+  'jpn': 'jpn',     // Japanese
+  'kor': 'kor',     // Korean
+  'cmn': 'chi_sim', // Chinese Simplified
+  'ara': 'ara',     // Arabic
+  'hin': 'hin',     // Hindi
+  'tha': 'tha',     // Thai
+  'nld': 'nld',     // Dutch
+  'pol': 'pol',     // Polish
+  'swe': 'swe',     // Swedish
+  'dan': 'dan',     // Danish
+  'nor': 'nor',     // Norwegian
+  'fin': 'fin'      // Finnish
+};
+
+// Text extraction result interface
+export interface TextExtractionResult {
+  text: string;
+  metadata?: {
+    pageCount?: number;
+    wordCount?: number;
+    characterCount?: number;
+    format?: string;
+    warnings?: string[];
+    frontMatter?: Record<string, any>;
+    extractionMethod?: 'pdf-parse' | 'ocr' | 'hybrid' | 'text' | 'text-fallback';
+    ocrProcessingTime?: number;
+    ocrConfidence?: number;
+    ocrLanguage?: string;
+    detectedLanguage?: string;        // Language detected by ELD (ISO 639-1 code)
+    languageConfidence?: number;      // ELD confidence score for detection
+    usedLanguageDetection?: boolean;  // Boolean flag indicating if auto-detection was used
+  };
+}
+
 // Route handler types
 export type PublicUploadHandler = (req: Request, res: Response) => Promise<Response>;
 export type PrivateUploadHandler = (req: AuthenticatedRequest, res: Response) => Promise<Response>;
@@ -184,6 +228,15 @@ export interface UploadServiceMethods {
     userId: string,
     metadata?: UploadMetadata
   ) => Promise<ServiceResult<MultipleUploadResponse>>;
+
+  // Text processing methods
+  processDocumentText: (documentId: string) => Promise<ServiceResult<TextExtractionResult>>;
+  
+  updateDocumentWithText: (
+    documentId: string,
+    text: string,
+    metadata: any
+  ) => Promise<ServiceResult<boolean>>;
 }
 
 // Controller interface
@@ -195,6 +248,7 @@ export interface UploadController {
   getUploadById: GetUploadHandler;
   listUploads: ListUploadsHandler;
   deleteUpload: DeleteUploadHandler;
+  processDocument: PrivateUploadHandler; // Process text extraction for existing document
 }
 
 // Request body interfaces

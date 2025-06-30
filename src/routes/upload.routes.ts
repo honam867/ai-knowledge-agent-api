@@ -28,3 +28,5 @@ uploadRoutes.get('/:id', uploadController.getUploadById);
 uploadRoutes.get('/', createJwtAuthMiddleware(), uploadController.listUploads);
 
 uploadRoutes.delete('/:id', createJwtAuthMiddleware(), uploadController.deleteUpload);
+
+uploadRoutes.post('/process/:id', createJwtAuthMiddleware(), uploadController.processDocument);

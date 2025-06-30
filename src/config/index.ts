@@ -32,6 +32,8 @@ export const createEnvConfig = (): EnvConfig => ({
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
+  ocrApiUrl: process.env.OCR_API_URL || 'http://localhost:5000/extract-text',
+  ocrApiTimeout: parseInt(process.env.OCR_API_TIMEOUT || '260000', 10),
 });
 
 /**

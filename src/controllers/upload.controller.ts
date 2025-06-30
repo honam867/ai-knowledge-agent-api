@@ -202,4 +202,94 @@ export const uploadController: UploadController = {
 
     return sendSuccess(res, 'Document deleted successfully', { deleted: true });
   }),
+
+  processDocument: asyncErrorHandler(async (req: AuthenticatedRequest, res: Response) => {
+    logInfo('Text processing request received', { userId: req.user?.id });
+
+    if (!req.user) {
+      return sendError(res, '', 'Authentication required', 401);
+    }
+
+    const { id } = req.params as unknown as UploadParams;
+
+    if (!id) {
+      return sendError(res, '', 'Document ID is required', 400);
+    }
+
+    // First, verify the document exists and user has access
+    const documentResult = await uploadService.getDocumentById(id);
+
+    if (!documentResult.success) {
+      logError('Document retrieval failed for processing', {
+        error: documentResult.error?.message,
+        documentId: id,
+        userId: req.user.id,
+      });
+      return sendError(res, documentResult.error?.message || 'Failed to retrieve document', '', 500);
+    }
+
+    if (!documentResult.data) {
+      return sendError(res, '', 'Document not found', 404);
+    }
+
+    // Check if user has access to this document (for private documents)
+    if (documentResult.data.userId && documentResult.data.userId !== req.user.id) {
+      return sendError(res, '', 'You do not have permission to process this document', 403);
+    }
+
+    // Check if document already has extracted text
+    const hasExistingText = documentResult.data.metadata?.textExtraction;
+    if (hasExistingText) {
+      logInfo('Document already has extracted text', {
+        documentId: id,
+        userId: req.user.id,
+        extractedAt: hasExistingText.extractedAt,
+      });
+    }
+
+    // Trigger text processing
+    const processingResult = await uploadService.processDocumentText(id);
+
+    if (!processingResult.success || !processingResult.data) {
+      logError('Text processing failed', {
+        error: processingResult.error?.message,
+        documentId: id,
+        userId: req.user.id,
+      });
+      return sendError(res, processingResult.error?.message || 'Text processing failed', '', 500);
+    }
+
+    const extractedData = processingResult.data;
+
+    // Generate text preview (first 200 characters)
+    const textPreview = extractedData.text.length > 200 
+      ? extractedData.text.substring(0, 200) + '...'
+      : extractedData.text;
+
+    const responseData = {
+      documentId: id,
+      status: 'ready',
+      textPreview,
+      metadata: {
+        wordCount: extractedData.metadata?.wordCount || 0,
+        pageCount: extractedData.metadata?.pageCount,
+        characterCount: extractedData.metadata?.characterCount || 0,
+        format: extractedData.metadata?.format,
+        warnings: extractedData.metadata?.warnings,
+        extractedAt: new Date().toISOString(),
+      },
+      textLength: extractedData.text.length,
+      wasReprocessed: !!hasExistingText,
+    };
+
+    logInfo('Text processing completed successfully', {
+      documentId: id,
+      userId: req.user.id,
+      textLength: extractedData.text.length,
+      wordCount: extractedData.metadata?.wordCount,
+      wasReprocessed: !!hasExistingText,
+    });
+
+    return sendSuccess(res, 'Text extraction completed', responseData);
+  }),
 };
